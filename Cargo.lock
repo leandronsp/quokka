@@ -459,6 +459,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
+name = "pool"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7ac1531a0016945992b4e816e81538dfad0b9f00d280bcb707d711839f1536d"
+
+[[package]]
 name = "postgres"
 version = "0.19.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,6 +527,7 @@ name = "quokka"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "pool",
  "postgres",
  "regex",
  "serde_json",
