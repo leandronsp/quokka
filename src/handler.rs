@@ -1,18 +1,18 @@
-use std::{net::TcpStream, io::{BufReader, BufRead, Read, Write}, collections::HashMap};
+use std::{net::TcpStream, io::{BufReader, BufRead, Read, Write}, collections::HashMap, sync::Arc};
 
 use chrono::Local;
 use regex::Regex;
 use serde_json::{Value, json};
 
-use crate::database_pool;
+use crate::database_pool::Pool;
 
-pub fn handle_connection(mut client: TcpStream) {
+pub fn handle_connection(mut client: TcpStream, db_pool: Arc<Pool>) {
     let mut reader = BufReader::new(&client);
     let mut headline = String::new();
     let mut params: HashMap<&str, String> = HashMap::new();
     
     let _ = reader.read_line(&mut headline);
-    print!("{}", headline);
+    //println!("{}", headline);
 
     let headline_pattern = Regex::new(r"^(GET|POST)\s\/clientes\/(\d+)\/(.*?)\sHTTP.*?").unwrap();
     let captures = headline_pattern.captures(&headline).unwrap();
@@ -29,7 +29,7 @@ pub fn handle_connection(mut client: TcpStream) {
 
     for line in reader.by_ref().lines() {
         let line = line.unwrap();
-        println!("{}", line);
+        //println!("{}", line);
 
         let parts: Vec<_> = line.split(":").collect();
 
@@ -58,14 +58,14 @@ pub fn handle_connection(mut client: TcpStream) {
         params.insert("descricao", description.to_string());
     }
 
-    println!("Params: {:?}", params);
+    //println!("Params: {:?}", params);
 
     let mut status = 200;
     let mut response_body = json!({}).to_string();
 
     match request_constraint.as_str() {
         "GET /clientes/:id/extrato" => {
-            let mut db = database_pool::pg_connection();
+            let mut db_conn = db_pool.clone().checkout().unwrap();
             let account_id = params["id"].parse::<i32>().unwrap();
 
             let account_query = r#"
@@ -77,7 +77,7 @@ pub fn handle_connection(mut client: TcpStream) {
                 WHERE accounts.id = $1
             "#;
 
-            let mut db_transaction = db.transaction().unwrap();
+            let mut db_transaction = db_conn.transaction().unwrap();
 
             if let Ok(account) = db_transaction.query_one(account_query, &[&account_id]) {
 
@@ -125,9 +125,10 @@ pub fn handle_connection(mut client: TcpStream) {
             }
 
             db_transaction.commit().unwrap();
+            db_pool.clone().release(db_conn);
         },
         "POST /clientes/:id/transacoes" => {
-            let mut db = database_pool::pg_connection();
+            let mut db_conn = db_pool.clone().checkout().unwrap();
             let account_id = params["id"].parse::<i32>().unwrap();
 
             let account_query = r#"
@@ -140,10 +141,10 @@ pub fn handle_connection(mut client: TcpStream) {
                 FOR UPDATE
             "#;
 
-            let mut db_transaction = db.transaction().unwrap();
+            let mut db_transaction = db_conn.transaction().unwrap();
+            //let _ = db_transaction.execute("SELECT pg_advisory_lock($1)", &[&account_id]);
 
             if let Ok(account) = db_transaction.query_one(account_query, &[&account_id]) {
-
                 let amount = params["valor"].parse::<i32>().unwrap();
                 let transaction_type = params["tipo"].as_str();
                 let description = params["descricao"].as_str();
@@ -155,6 +156,7 @@ pub fn handle_connection(mut client: TcpStream) {
                         amount == 0 ||
                         !vec!["c", "d"].contains(&transaction_type) ||
                         description.is_empty() ||
+                        description.len() > 10 ||
                         (transaction_type == "d" && reached_limit(balance, limit_amount, amount)) {
                     status = 422
                 } else {
@@ -197,7 +199,9 @@ pub fn handle_connection(mut client: TcpStream) {
                 status = 404;
             }
 
+            //let _ = db_transaction.execute("SELECT pg_advisory_unlock($1)", &[&account_id]);
             db_transaction.commit().unwrap();
+            db_pool.clone().release(db_conn);
         },
         _ => {
             status = 404;
