@@ -2,9 +2,7 @@ FROM rust AS base
 WORKDIR /app
 
 FROM base AS prod
-COPY Cargo.toml .
-COPY Cargo.lock .
-RUN cargo build --release
 COPY . .
+RUN cargo build --release
 EXPOSE 3000
 CMD ["cargo", "run", "--release"]
