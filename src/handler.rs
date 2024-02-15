@@ -70,17 +70,15 @@ pub fn handle_connection(mut client: TcpStream, db_pool: Arc<Pool>) {
 
             let account_query = r#"
                 SELECT 
-                    accounts.limit_amount AS limit_amount,
-                    balances.amount AS balance
+                    limit_amount,
+                    balance
                 FROM accounts
-                JOIN balances ON balances.account_id = accounts.id 
                 WHERE accounts.id = $1
             "#;
 
             let mut db_transaction = db_conn.transaction().unwrap();
 
             if let Ok(account) = db_transaction.query_one(account_query, &[&account_id]) {
-
                 let limit_amount: i32 = account.get("limit_amount");
                 let balance: i32 = account.get("balance");
 
@@ -89,7 +87,7 @@ pub fn handle_connection(mut client: TcpStream, db_pool: Arc<Pool>) {
                         amount,
                         transaction_type,
                         description,
-                        TO_CHAR(date, 'YYYY-MM-DD') AS date
+                        TO_CHAR(date, 'YYYY-MM-DD HH:MI:SS.US') AS date
                     FROM transactions
                     WHERE account_id = $1
                     ORDER BY date DESC
@@ -133,16 +131,14 @@ pub fn handle_connection(mut client: TcpStream, db_pool: Arc<Pool>) {
 
             let account_query = r#"
                 SELECT 
-                    accounts.limit_amount AS limit_amount,
-                    balances.amount AS balance
+                    limit_amount,
+                    balance
                 FROM accounts
-                JOIN balances ON balances.account_id = accounts.id 
                 WHERE accounts.id = $1
                 FOR UPDATE
             "#;
 
             let mut db_transaction = db_conn.transaction().unwrap();
-            //let _ = db_transaction.execute("SELECT pg_advisory_lock($1)", &[&account_id]);
 
             if let Ok(account) = db_transaction.query_one(account_query, &[&account_id]) {
                 let amount = params["valor"].parse::<i32>().unwrap();
@@ -169,17 +165,17 @@ pub fn handle_connection(mut client: TcpStream, db_pool: Arc<Pool>) {
 
                     if transaction_type == "c" {
                         let update_stmt = r#"
-                            UPDATE balances 
-                            SET amount = amount + $2
-                            WHERE account_id = $1
+                            UPDATE accounts 
+                            SET balance = balance + $2
+                            WHERE accounts.id = $1
                         "#;
 
                         let _ = db_transaction.execute(update_stmt, &[&account_id, &amount]).unwrap();
                     } else {
                         let update_stmt = r#"
-                            UPDATE balances 
-                            SET amount = amount - $2
-                            WHERE account_id = $1
+                            UPDATE accounts 
+                            SET balance = balance - $2
+                            WHERE accounts.id = $1
                         "#;
 
                         let _ = db_transaction.execute(update_stmt, &[&account_id, &amount]).unwrap();
@@ -199,7 +195,6 @@ pub fn handle_connection(mut client: TcpStream, db_pool: Arc<Pool>) {
                 status = 404;
             }
 
-            //let _ = db_transaction.execute("SELECT pg_advisory_unlock($1)", &[&account_id]);
             db_transaction.commit().unwrap();
             db_pool.clone().release(db_conn);
         },
