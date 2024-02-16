@@ -1,9 +1,8 @@
 pub mod get {
     use chrono::Local;
-    use postgres::{Client, NoTls};
     use serde_json::json;
 
-    use crate::request::Request;
+    use crate::{request::Request, database::Database};
 
     pub fn bank_statement(request: Request) -> (u16, String) {
         let mut status = 200;
@@ -19,10 +18,9 @@ pub mod get {
             WHERE accounts.id = $1
         "#;
 
-        let connection_str = "host=localhost user=postgres password=postgres dbname=postgres";
-        let mut db_conn = Client::connect(connection_str, NoTls).unwrap();
+        let mut db = Database::new();
 
-        if let Ok(account) = db_conn.query_one(account_query, &[&account_id]) {
+        if let Ok(account) = db.conn.query_one(account_query, &[&account_id]) {
             let limit_amount: i32 = account.get("limit_amount");
             let balance: i32 = account.get("balance");
 
@@ -38,7 +36,7 @@ pub mod get {
                 LIMIT 10
             "#;
 
-            let ten_transactions = db_conn.query(ten_transactions_query, &[&account_id]).unwrap();
+            let ten_transactions = db.conn.query(ten_transactions_query, &[&account_id]).unwrap();
 
             let ten_transactions_json: Vec<_> = ten_transactions.into_iter().map(|transaction| {
                 let amount: i32 = transaction.get("amount");
@@ -66,7 +64,7 @@ pub mod get {
             status = 404;
         }
 
-        let _ = db_conn.close();
+        let _ = db.conn.close();
 
         (status, body)
     }
@@ -77,17 +75,15 @@ pub mod get {
 }
 
 pub mod post {
-    use postgres::{Client, NoTls};
     use serde_json::json;
 
-    use crate::request::Request;
+    use crate::{request::Request, database::Database};
 
     pub fn transaction(request: Request) -> (u16, String) {
         let mut status = 200;
         let mut body = json!({}).to_string();
 
-        let connection_str = "host=localhost user=postgres password=postgres dbname=postgres";
-        let mut db_conn = Client::connect(connection_str, NoTls).unwrap();
+        let mut db = Database::new();
         let account_id: i32 = request.params["id"].parse::<i32>().unwrap();
 
         let account_query = r#"
@@ -99,7 +95,7 @@ pub mod post {
             FOR UPDATE
         "#;
 
-        if let Ok(account) = db_conn.query_one(account_query, &[&account_id]) {
+        if let Ok(account) = db.conn.query_one(account_query, &[&account_id]) {
             let amount: i32 = request.params["valor"].parse::<i32>().unwrap_or(0);
             let transaction_type: &str = request.params["tipo"].as_str();
             let description: &str = request.params["descricao"].as_str();
@@ -119,7 +115,7 @@ pub mod post {
                     VALUES ($1, $2, $3, $4)
                 "#;
 
-                let _ = db_conn.execute(insert_stmt, &[&account_id, &amount, &transaction_type, &description]).unwrap();
+                let _ = db.conn.execute(insert_stmt, &[&account_id, &amount, &transaction_type, &description]).unwrap();
 
                 if transaction_type == "c" {
                     let update_stmt = r#"
@@ -128,7 +124,7 @@ pub mod post {
                         WHERE accounts.id = $1
                     "#;
 
-                    let _ = db_conn.execute(update_stmt, &[&account_id, &amount]).unwrap();
+                    let _ = db.conn.execute(update_stmt, &[&account_id, &amount]).unwrap();
                 } else {
                     let update_stmt = r#"
                         UPDATE accounts 
@@ -136,10 +132,10 @@ pub mod post {
                         WHERE accounts.id = $1
                     "#;
 
-                    let _ = db_conn.execute(update_stmt, &[&account_id, &amount]).unwrap();
+                    let _ = db.conn.execute(update_stmt, &[&account_id, &amount]).unwrap();
                 }
 
-                let account = db_conn.query_one(account_query, &[&account_id]).unwrap();
+                let account = db.conn.query_one(account_query, &[&account_id]).unwrap();
                 let limit_amount: i32 = account.get("limit_amount");
                 let balance: i32 = account.get("balance");
 
@@ -153,7 +149,7 @@ pub mod post {
             status = 404;
         }
 
-        let _ = db_conn.close();
+        let _ = db.conn.close();
 
         (status, body)
     }

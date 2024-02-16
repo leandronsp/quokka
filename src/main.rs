@@ -4,6 +4,7 @@ use std::net::TcpListener;
 mod handler;
 mod request;
 mod router;
+mod database;
 
 fn main() {
     let listener: TcpListener = TcpListener::bind("0.0.0.0:3000").unwrap();

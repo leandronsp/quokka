@@ -1,0 +1,17 @@
+#!/bin/bash
+
+PORT=$1
+
+if [ -z "$PORT" ]; then 
+	PORT=3000
+fi
+
+printf "==== Porta: $PORT ====\n\n"
+
+printf "Transferencia (crédito de 10 reais):\n"
+curl -X POST -d '{"valor": 10, "tipo": "c", "descricao": "blah"}' -H 'Content-Type: application/json' localhost:$PORT/clientes/1/transacoes
+
+printf "\n\n"
+
+printf "Extrato:\n"
+curl localhost:$PORT/clientes/1/extrato

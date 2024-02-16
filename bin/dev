@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export DATABASE_HOST=localhost
+docker compose down && docker compose up -d postgres && cargo watch -x run
