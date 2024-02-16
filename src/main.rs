@@ -1,10 +1,13 @@
+use std::io::Write;
 use std::{sync::Arc, thread};
 use std::net::TcpListener;
 
 mod thread_pool;
 mod handler;
+mod router;
 
 pub(crate) mod database_pool;
+pub(crate) mod request;
 
 fn main() {
     let listener: TcpListener = TcpListener::bind("0.0.0.0:3000").unwrap();
@@ -19,8 +22,13 @@ fn main() {
 
         thread::spawn(move || {
             loop {
-                let client = channel.recv().unwrap(); 
-                handler::handle_connection(client, db_pool.clone());
+                let mut client = channel.recv().unwrap(); 
+                let (status, body) = handler::handle_connection(&mut client, db_pool.clone());
+
+                let response = 
+                    format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\r\n{body}");
+
+                let _ = client.write_all(response.as_bytes());
             }
         });
     });
