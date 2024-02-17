@@ -9,7 +9,7 @@ pub struct Database {
 impl Database {
     pub fn new() -> Database {
         Self {
-            conn: Client::connect(Self::configuration().as_str(), NoTls).unwrap()
+            conn: Client::connect(Self::configuration().as_str(), NoTls).expect("Database is down")
         }
     }
 

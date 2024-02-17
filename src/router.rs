@@ -20,7 +20,7 @@ pub mod get {
             WHERE accounts.id = $1
         "#;
 
-        let mut db = db_pool.pop().unwrap();
+        let mut db = db_pool.pop();
 
         if let Ok(account) = db.conn.query_one(account_query, &[&account_id]) {
             let limit_amount: i32 = account.get("limit_amount");
@@ -87,7 +87,7 @@ pub mod post {
         let mut status = 200;
         let mut body = json!({}).to_string();
 
-        let mut db = db_pool.pop().unwrap();
+        let mut db = db_pool.pop();
         let mut db_transaction = db.conn.transaction().unwrap();
         let account_id: i32 = request.params["id"].parse::<i32>().unwrap();
 

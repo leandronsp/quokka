@@ -31,7 +31,7 @@ fn main() {
 
         thread::spawn(move || {
             loop {
-                let client = queue.pop().unwrap();
+                let client = queue.pop();
                 handle(client, pool.clone());
             }
         });
