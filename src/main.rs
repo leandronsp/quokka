@@ -1,44 +1,17 @@
-use std::collections::VecDeque;
+
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc};
 use std::thread;
 
 use crate::database::Database;
+use crate::queue::Queue;
 
+mod queue;
 mod handler;
 mod request;
 mod router;
 mod database;
-
-pub struct Queue<T> {
-    store: Mutex<VecDeque<T>>,
-    emitter: Condvar
-}
-
-impl<T> Queue<T> {
-    fn new() -> Queue<T> {
-        Self {
-            store: Mutex::new(VecDeque::new()),
-            emitter: Condvar::new(),
-        }
-    }
-
-    pub fn push(&self, item: T) {
-        self.store.lock().unwrap().push_back(item);
-        self.emitter.notify_one()
-    }
-
-    pub fn pop(&self) -> Option<T> {
-        let mut store = self.store.lock().unwrap();
-
-        if store.is_empty() {
-            store = self.emitter.wait(store).unwrap();
-        }
-
-        store.pop_front()
-    }
-}
 
 fn main() {
     let listener: TcpListener = TcpListener::bind("0.0.0.0:3000").unwrap();
