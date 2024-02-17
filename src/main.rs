@@ -1,14 +1,13 @@
 
-use std::io::Write;
-use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc};
-use std::thread;
+use std::{io::{Write, BufReader}, net::{TcpListener, TcpStream}};
+use std::{sync::Arc, thread};
+
+use request::Request;
 
 use crate::database::Database;
 use crate::queue::Queue;
 
 mod queue;
-mod handler;
 mod request;
 mod router;
 mod database;
@@ -44,10 +43,21 @@ fn main() {
 }
 
 fn handle(mut client: TcpStream, db_pool: Arc<Queue<Database>>) {
-    let (status, body) = handler::handle_connection(&mut client, db_pool);
+    let reader = BufReader::new(&mut client);
+    let request = Request::parse(reader);
+
+    let (status, body) = route(request, db_pool);
 
     let response = 
         format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\r\n{body}");
 
     let _ = client.write_all(response.as_bytes());
+}
+
+fn route(request: Request, db_pool: Arc<Queue<Database>>) -> (u16, String) {
+    match request.route.as_str() {
+        "GET /clientes/:id/extrato" => router::get::bank_statement(request, db_pool),
+        "POST /clientes/:id/transacoes" => router::post::transaction(request, db_pool),
+        _ => router::get::not_found()
+    }
 }

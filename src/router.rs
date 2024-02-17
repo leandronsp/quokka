@@ -10,7 +10,7 @@ pub mod get {
         let mut status = 200;
         let mut body = json!({}).to_string();
 
-        let account_id: i32 = request.params["id"].parse::<i32>().unwrap();
+        let account_id: i32 = request.params["id"].parse::<i32>().unwrap_or(0);
 
         let account_query = r#"
             SELECT 
@@ -89,7 +89,7 @@ pub mod post {
 
         let mut db = db_pool.pop();
         let mut db_transaction = db.conn.transaction().unwrap();
-        let account_id: i32 = request.params["id"].parse::<i32>().unwrap();
+        let account_id: i32 = request.params["id"].parse::<i32>().unwrap_or(0);
 
         let account_query = r#"
             SELECT 
