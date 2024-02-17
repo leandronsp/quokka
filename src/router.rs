@@ -1,10 +1,12 @@
 pub mod get {
+    use std::sync::Arc;
+
     use chrono::Local;
     use serde_json::json;
 
-    use crate::{request::Request, database::Database};
+    use crate::{request::Request, database::Database, Queue};
 
-    pub fn bank_statement(request: Request) -> (u16, String) {
+    pub fn bank_statement(request: Request, db_pool: Arc<Queue<Database>>) -> (u16, String) {
         let mut status = 200;
         let mut body = json!({}).to_string();
 
@@ -18,7 +20,7 @@ pub mod get {
             WHERE accounts.id = $1
         "#;
 
-        let mut db = Database::new();
+        let mut db = db_pool.pop().unwrap();
 
         if let Ok(account) = db.conn.query_one(account_query, &[&account_id]) {
             let limit_amount: i32 = account.get("limit_amount");
@@ -64,7 +66,7 @@ pub mod get {
             status = 404;
         }
 
-        let _ = db.conn.close();
+        db_pool.push(db);
 
         (status, body)
     }
@@ -75,15 +77,18 @@ pub mod get {
 }
 
 pub mod post {
+    use std::sync::Arc;
+
     use serde_json::json;
 
-    use crate::{request::Request, database::Database};
+    use crate::{request::Request, database::Database, Queue};
 
-    pub fn transaction(request: Request) -> (u16, String) {
+    pub fn transaction(request: Request, db_pool: Arc<Queue<Database>>) -> (u16, String) {
         let mut status = 200;
         let mut body = json!({}).to_string();
 
-        let mut db = Database::new();
+        let mut db = db_pool.pop().unwrap();
+        let mut db_transaction = db.conn.transaction().unwrap();
         let account_id: i32 = request.params["id"].parse::<i32>().unwrap();
 
         let account_query = r#"
@@ -95,7 +100,7 @@ pub mod post {
             FOR UPDATE
         "#;
 
-        if let Ok(account) = db.conn.query_one(account_query, &[&account_id]) {
+        if let Ok(account) = db_transaction.query_one(account_query, &[&account_id]) {
             let amount: i32 = request.params["valor"].parse::<i32>().unwrap_or(0);
             let transaction_type: &str = request.params["tipo"].as_str();
             let description: &str = request.params["descricao"].as_str();
@@ -115,7 +120,7 @@ pub mod post {
                     VALUES ($1, $2, $3, $4)
                 "#;
 
-                let _ = db.conn.execute(insert_stmt, &[&account_id, &amount, &transaction_type, &description]).unwrap();
+                let _ = db_transaction.execute(insert_stmt, &[&account_id, &amount, &transaction_type, &description]).unwrap();
 
                 if transaction_type == "c" {
                     let update_stmt = r#"
@@ -124,7 +129,7 @@ pub mod post {
                         WHERE accounts.id = $1
                     "#;
 
-                    let _ = db.conn.execute(update_stmt, &[&account_id, &amount]).unwrap();
+                    let _ = db_transaction.execute(update_stmt, &[&account_id, &amount]).unwrap();
                 } else {
                     let update_stmt = r#"
                         UPDATE accounts 
@@ -132,10 +137,10 @@ pub mod post {
                         WHERE accounts.id = $1
                     "#;
 
-                    let _ = db.conn.execute(update_stmt, &[&account_id, &amount]).unwrap();
+                    let _ = db_transaction.execute(update_stmt, &[&account_id, &amount]).unwrap();
                 }
 
-                let account = db.conn.query_one(account_query, &[&account_id]).unwrap();
+                let account = db_transaction.query_one(account_query, &[&account_id]).unwrap();
                 let limit_amount: i32 = account.get("limit_amount");
                 let balance: i32 = account.get("balance");
 
@@ -149,7 +154,8 @@ pub mod post {
             status = 404;
         }
 
-        let _ = db.conn.close();
+        db_transaction.commit().unwrap();
+        db_pool.push(db);
 
         (status, body)
     }

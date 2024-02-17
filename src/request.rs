@@ -19,7 +19,7 @@ impl Request {
         let mut headline = String::new();
 
         let _ = reader.read_line(&mut headline);
-        println!("{}", headline);
+        //println!("{}", headline);
 
         let headline_pattern = 
             Regex::new(r"^(GET|POST)\s\/clientes\/(\d+)\/(.*?)\sHTTP.*?").unwrap();
