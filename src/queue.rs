@@ -14,17 +14,17 @@ impl<T> Queue<T> {
     }
 
     pub fn push(&self, item: T) {
-        self.store.lock().unwrap().push_back(item);
+        self.store.lock().expect("Cloud not acquire lock on mutex").push_back(item);
         self.emitter.notify_one()
     }
 
     pub fn pop(&self) -> T {
-        let mut store = self.store.lock().unwrap();
+        let mut store = self.store.lock().expect("Could not acquire lock on mutex");
 
-        if store.is_empty() {
+        while store.is_empty() {
             store = self.emitter.wait(store).unwrap();
         }
 
-        store.pop_front().unwrap()
+        store.pop_front().expect("The queue is empty")
     }
 }
